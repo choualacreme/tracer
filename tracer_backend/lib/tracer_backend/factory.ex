@@ -1,3 +1,24 @@
+defmodule Factory.TestRunner do
+  @moduledoc "トレーサーのアタッチと工場ラインの稼働を安全に同期する"
+
+  def run do
+    # 1. まずSupervisorを子プロセスなしで起動
+    {:ok, sup_pid} = Supervisor.start_link([], strategy: :one_for_one)
+
+    # 2. トレーサーをSupervisorにアタッチ（以降の子プロセスも自動追跡される）
+    TracerBackend.SystemTracer.trace_tree(sup_pid)
+
+    # 3. トレース準備が整ってから実際の工場システムをツリーの下にぶら下げる
+    Supervisor.start_child(sup_pid, %{
+      id: Factory.Supervisor,
+      start: {Factory.Supervisor, :start_link, [[]]},
+      restart: :temporary
+    })
+
+    IO.puts("🚀 生産ラインのトレースを開始しました")
+  end
+end
+
 defmodule Factory.Storage do
   @moduledoc "完成品を保管する倉庫。目標数に達したらシステムを止める"
   use GenServer

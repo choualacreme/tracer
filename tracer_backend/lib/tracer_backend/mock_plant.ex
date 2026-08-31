@@ -46,7 +46,7 @@ defmodule MockPlant.Sensor do
 end
 
 defmodule MockPlant.Controller do
-  @moduledoc "制御装置（ロジックの中心。ここでエラーが起きる）"
+  @moduledoc "制御装置"
   use GenServer
 
   def start_link(_), do: GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
@@ -56,7 +56,6 @@ defmodule MockPlant.Controller do
 
   @impl true
   def handle_info({:temperature, temp}, state) do
-    # ここでエラーの火種が生まれる
     # もし temp が数値なら正常に計算できるが、文字列だと ArithmeticError でクラッシュする
     safe_limit = temp / 2
 
@@ -66,7 +65,7 @@ defmodule MockPlant.Controller do
 end
 
 defmodule MockPlant.Turbine do
-  @moduledoc "タービン（末端のアクチュエータ）"
+  @moduledoc "タービン"
   use GenServer
 
   def start_link(_), do: GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
