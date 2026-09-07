@@ -1,47 +1,660 @@
-.container {
+/* ==========================================
+   React Flow Controls スタイル上書き
+   ========================================== */
+.react-flow__controls-button {
+  background-color: #333 !important;
+  border-bottom: 1px solid #555 !important;
+  fill: #eee !important;
+}
+.react-flow__controls-button:hover {
+  background-color: #444 !important;
+}
+.react-flow__controls-button svg {
+  fill: #eee !important;
+}
+
+.custom-controls {
+  margin-bottom: 20px !important;
+  margin-right: 20px !important;
+  background-color: #333 !important;
+  border-radius: 6px !important;
+  border: 1px solid #555 !important;
+  overflow: hidden !important;
+}
+
+/* ==========================================
+   アプリケーション全体・レイアウト
+   ========================================= */
+.app-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   padding: 20px;
-  text-align: left;
+  background-color: #242424;
+  color: #fff;
   font-family: sans-serif;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
-.log-box {
-  height: 500px;
-  overflow-y: auto;
+.app-title {
+  margin: 0 0 16px 0;
+}
+
+.header-controls {
+  margin-bottom: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn-base {
+  padding: 6px 12px;
+  cursor: pointer;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+}
+
+.btn-clear {
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.btn-live-active {
+  background-color: #4caf50;
+}
+
+.btn-live-paused {
+  background-color: #f44336;
+}
+
+.btn-replay-active {
+  background-color: #2196f3;
+}
+
+.btn-replay-idle {
+  background-color: #607d8b;
+}
+
+.btn-focus-on {
+  background-color: #ff9800;
+}
+
+.btn-focus-off {
+  background-color: #9e9e9e;
+}
+
+.btn-label-on {
+  background-color: #e91e63;
+  margin-left: auto;
+}
+
+.btn-label-off {
+  background-color: #9e9e9e;
+  margin-left: auto;
+}
+
+.speed-control-box {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.speed-select {
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background-color: #333;
+  color: #fff;
+}
+
+/* ==========================================
+   タイムライン・シークバー
+   ========================================== */
+.timeline-card {
+  margin-bottom: 16px;
+  padding: 15px;
+  background-color: #333;
   border: 1px solid #444;
-  padding: 10px;
-  background-color: #1e1e1e;
-  color: #d4d4d4;
-  border-radius: 8px;
+  borderRadius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
 
-.log-list {
-  list-style: none;
-  padding: 0;
+.timeline-step-btn {
+  padding: 0 15px;
+}
+
+.timeline-step-btn:disabled {
+  cursor: not-allowed;
+}
+
+.timeline-step-btn:not(:disabled) {
+  cursor: pointer;
+}
+
+.timeline-track-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.timeline-label {
+  font-size: 12px;
+  width: 65px;
+  color: #aaa;
+  font-weight: bold;
+}
+
+.timeline-bar-container {
+  position: relative;
+  flex: 1;
+  height: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.timeline-pins-overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.timeline-pin {
+  position: absolute;
+  top: 2px;
+  width: 2px;
+  height: 12px;
+  background-color: #888;
+  transform: translateX(-50%);
+  opacity: 0.6;
+}
+
+.timeline-range-input {
+  width: 100%;
+  margin: 0;
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0.5;
+}
+
+.timeline-clock {
+  font-size: 14px;
+  width: 100px;
+  text-align: right;
+  font-family: monospace;
+  color: #ccc;
+}
+
+/* ==========================================
+   グラフ・キャンバス・オーバーレイ
+   ========================================== */
+.canvas-wrapper {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+}
+
+.graph-full-container {
+  width: 100%;
+  height: 100%;
+}
+
+.overlay-panel-container {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.panel-open {
+  transform: translateX(0);
+}
+
+.panel-closed {
+  transform: translateX(-100%);
+}
+
+.panel-body {
+  width: 45vw;
+  min-width: 400px;
+  maxWidth: 600px;
+  height: 100%;
+  display: flex;
+  gap: 10px;
+  padding: 15px;
+  box-sizing: border-box;
+  background-color: rgba(25, 25, 25, 0.9);
+  backdrop-filter: blur(4px);
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+.panel-toggle-tab {
+  position: absolute;
+  top: 15px;
+  right: -24px;
+  width: 24px;
+  height: 60px;
+  background-color: #333;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+}
+
+/* 縦型シークバー (Seq) */
+.seq-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #444;
+}
+
+.seq-label {
+  font-size: 10px;
+  color: #999;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.seq-track-box {
+  position: relative;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  width: 24px;
+  padding: 5px 0;
+  overflow: hidden;
+}
+
+.seq-pins-overlay {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 50%;
+  width: 100%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.seq-pin {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  opacity: 0.8;
+}
+
+.seq-range-input {
+  writing-mode: vertical-lr;
+  width: 16px;
+  height: 100%;
+  cursor: pointer;
+  z-index: 3;
+  opacity: 0.6;
   margin: 0;
 }
 
-.log-item {
-  margin-bottom: 8px;
-  border-bottom: 1px solid #333;
-  padding-bottom: 4px;
+/* パネル内操作・フィルタ */
+.panel-main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
 }
 
-.log-type {
-  color: #4CAF50;
+.filter-box {
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.layers-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.layers-label {
+  font-size: 11px;
   font-weight: bold;
-  margin-right: 8px;
+  color: #999;
+  margin-right: 4px;
 }
 
-.log-source {
-  color: #ffffff;
+.layer-tag-btn {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
 }
 
-.log-target {
-  color: #569CD6;
+.search-row {
+  display: flex;
+  gap: 8px;
 }
 
-.log-clock {
-  color: #808080;
-  margin-left: 12px;
-  font-size: 0.85em;
+.search-input {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 12px;
+  flex: 1;
+}
+
+.search-reset-btn {
+  padding: 6px 10px;
+  border-radius: 4px;
+  background-color: #555;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.options-row {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.checkbox-label {
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  color: #bbb;
+}
+
+/* パネル内タブ・テーブル */
+.table-tabs-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background-color: transparent;
+}
+
+.tabs-header {
+  display: flex;
+  background-color: #333;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 8px;
+  text-align: center;
+  cursor: pointer;
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.tab-active-logs {
+  background-color: #4caf50;
+}
+
+.tab-active-states {
+  background-color: #c586c0;
+}
+
+.tab-inactive {
+  background-color: transparent;
+}
+
+.table-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  color: #d4d4d4;
+  position: relative;
+}
+
+/* ==========================================
+   データテーブル
+   ========================================== */
+.table-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto; /* 【修正】横スクロールを明示的に許可 */
+  color: #d4d4d4;
+  position: relative;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 650px; /* 【修正】各列の合計幅を確保し、強引な圧縮を防止 */
+  border-collapse: collapse;
+  font-size: 11px;
+  text-align: left;
+  table-layout: fixed;
+}
+
+.data-table-head {
+  position: sticky;
+  top: 0;
+  background-color: rgba(51, 51, 51, 0.95);
+  z-index: 10;
+}
+
+.data-table-head th {
+  padding: 6px;
+  box-sizing: border-box;
+}
+
+/* 各列の固定幅設定 */
+.th-pt { width: 85px; }
+.th-lt { width: 40px; }
+.th-type { width: 80px; }
+.th-source { width: 120px; }
+.th-target { width: 120px; }
+.th-payload { width: 220px; } /* 【修正】autoではなく十分な固定幅を指定 */
+
+.log-row {
+  border-bottom: 1px solid #444;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.log-row:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.log-row-selected {
+  background-color: rgba(76, 175, 80, 0.4) !important;
+}
+
+.col-pt {
+  padding: 4px 6px;
+  font-family: monospace;
+  color: #aaa;
+  border-right: 1px solid #555;
+  white-space: nowrap;
+}
+
+.col-lt {
+  padding: 4px 6px;
+  font-family: monospace;
+  color: #aaa;
+  text-align: center;
+}
+
+.col-type {
+  padding: 4px 6px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.col-process {
+  padding: 4px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.col-payload {
+  padding: 4px 6px;
+  word-break: break-all;
+  box-sizing: border-box;
+}
+
+.col-payload-clamp {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.col-payload-expand {
+  white-space: pre-wrap;
+  overflow: visible;
+}
+
+/* ==========================================
+   ツールチップ
+   ========================================== */
+.floating-tooltip {
+  position: fixed;
+  background-color: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 9999;
+  white-space: pre-wrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.tooltip-header {
+  border-bottom: 1px solid #555;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.tooltip-title {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.tooltip-pid {
+  font-size: 11px;
+  color: #999;
+  font-family: monospace;
+}
+
+.tooltip-grid-activities {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 6px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.tooltip-state-box {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #555;
+  color: #dcdcaa;
+  font-family: monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+/* ==========================================
+   プールグループ囲み枠
+   ========================================== */
+.pool-group-node {
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 2px dashed #666;
+  border-radius: 16px;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+  pointer-events: all;
+}
+
+.pool-group-node:hover {
+  background-color: rgba(255, 255, 255, 0.07);
+  border-color: #888;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
+}
+
+.pool-group-node .react-flow__handle {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 1px !important;
+  height: 1px !important;
+}
+
+.pool-group-header {
+  position: absolute;
+  top: -12px;
+  left: 16px;
+  background-color: #2b2b2b;
+  color: #ccc;
+  border: 1px solid #666;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
+}
+
+.pool-group-header:hover {
+  background-color: #444;
+  color: #fff;
+  border-color: #888;
 }
