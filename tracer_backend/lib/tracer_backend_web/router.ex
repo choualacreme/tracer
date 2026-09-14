@@ -17,7 +17,8 @@ defmodule TracerBackendWeb.Router do
   scope "/", TracerBackendWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    get "/", PageController, :index
+    get "/*path", PageController, :index
   end
 
   # Other scopes may use custom stacks.

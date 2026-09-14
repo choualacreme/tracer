@@ -124,7 +124,7 @@
   padding: 15px;
   background-color: #333;
   border: 1px solid #444;
-  borderRadius: 8px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 15px;
@@ -238,9 +238,9 @@
 }
 
 .panel-body {
-  width: 45vw;
-  min-width: 400px;
-  maxWidth: 600px;
+  width: 50vw;
+  min-width: 500px;
+  max-width: 850px;
   height: 100%;
   display: flex;
   gap: 10px;
@@ -460,14 +460,14 @@
 .table-scroll-area {
   flex: 1;
   overflow-y: auto;
-  overflow-x: auto; /* 【修正】横スクロールを明示的に許可 */
+  overflow-x: auto;
   color: #d4d4d4;
   position: relative;
 }
 
 .data-table {
   width: 100%;
-  min-width: 650px; /* 【修正】各列の合計幅を確保し、強引な圧縮を防止 */
+  min-width: 720px;
   border-collapse: collapse;
   font-size: 11px;
   text-align: left;
@@ -486,13 +486,13 @@
   box-sizing: border-box;
 }
 
-/* 各列の固定幅設定 */
 .th-pt { width: 85px; }
-.th-lt { width: 40px; }
-.th-type { width: 80px; }
-.th-source { width: 120px; }
-.th-target { width: 120px; }
-.th-payload { width: 220px; } /* 【修正】autoではなく十分な固定幅を指定 */
+.th-lt { width: 35px; }
+.th-cat { width: 65px; }
+.th-type { width: 75px; }
+.th-source { width: 110px; }
+.th-target { width: 110px; }
+.th-payload { width: auto; min-width: 180px; }
 
 .log-row {
   border-bottom: 1px solid #444;
@@ -521,6 +521,55 @@
   font-family: monospace;
   color: #aaa;
   text-align: center;
+}
+
+.col-cat {
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+
+.cat-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.cat-app { background-color: rgba(76, 175, 80, 0.2); color: #81c784; border: 1px solid #4caf50; }
+.cat-otp { background-color: rgba(33, 150, 243, 0.2); color: #64b5f6; border: 1px solid #2196f3; }
+.cat-system { background-color: rgba(158, 158, 158, 0.2); color: #bbb; border: 1px solid #777; }
+.cat-timer { background-color: rgba(255, 152, 0, 0.2); color: #ffb74d; border: 1px solid #ff9800; }
+
+.filter-divider {
+  height: 1px;
+  background-color: #444;
+  margin: 4px 0;
+}
+
+/* カテゴリボタンスタイル（表内バッジと統一） */
+.category-tag-btn {
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.15s ease;
+}
+
+.category-tag-btn.cat-btn-app.active { background-color: rgba(76, 175, 80, 0.25); color: #81c784; border: 1px solid #4caf50; }
+.category-tag-btn.cat-btn-otp.active { background-color: rgba(33, 150, 243, 0.25); color: #64b5f6; border: 1px solid #2196f3; }
+.category-tag-btn.cat-btn-system.active { background-color: rgba(158, 158, 158, 0.25); color: #bbb; border: 1px solid #777; }
+.category-tag-btn.cat-btn-timer.active { background-color: rgba(255, 152, 0, 0.25); color: #ffb74d; border: 1px solid #ff9800; }
+
+.category-tag-btn.inactive {
+  background-color: transparent;
+  color: #666;
+  border: 1px solid #444;
 }
 
 .col-type {
@@ -657,4 +706,93 @@
   background-color: #444;
   color: #fff;
   border-color: #888;
+}
+
+/* ==========================================
+   ノード・エッジの動的状態クラス (CSS変数活用)
+   ========================================== */
+.custom-node {
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+  --event-color: transparent;
+}
+
+/* 形状・役割ベース */
+.node-standard {
+  border: 1px solid #888;
+  padding: 10px;
+  border-radius: 5px;
+  background-color: white;
+  color: #333;
+  width: 150px;
+  font-size: 11px;
+  text-align: center;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.node-pool {
+  border: 2px solid #4CAF50;
+  padding: 10px 20px;
+  border-radius: 50px;
+  background-color: white;
+  color: #333;
+  min-width: 160px;
+  font-size: 11px;
+  text-align: center;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.node-worker {
+  border: 2px solid #64748b;
+  background-color: #e2e8f0;
+  border-radius: 50%;
+  width: 20px !important;
+  height: 20px !important;
+  padding: 0;
+}
+
+.node-anonymous {
+  border: 2px solid #818cf8;
+  background-color: #e0e7ff;
+  border-radius: 50%;
+  width: 20px !important;
+  height: 20px !important;
+  padding: 0;
+}
+
+/* ライフサイクル・状態ベース */
+.node-hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.node-dimmed {
+  opacity: 0.3 !important;
+}
+
+.node-dead {
+  background-color: #333333 !important;
+  color: #aaaaaa !important;
+  border: 2px dashed #777 !important;
+  opacity: 0.5;
+}
+
+.node-crash {
+  background-color: #4a1515 !important;
+  color: #fca5a5 !important;
+  border: 2px solid #ef4444 !important;
+  opacity: 0.7;
+}
+
+.node-focused {
+  opacity: 1 !important;
+  border-color: var(--event-color) !important;
+  box-shadow: 0 0 15px var(--event-color) !important;
+}
+
+/* 標準ノードのみフォーカス時に白背景を維持 */
+.node-standard.node-focused {
+  background-color: white !important;
 }

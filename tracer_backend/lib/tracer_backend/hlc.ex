@@ -6,14 +6,18 @@ defmodule TracerBackend.HLC do
 
   defstruct pt: 0, c: 0
 
+  def default_physical_time do
+    System.os_time(:millisecond)
+  end
+
   # 新しい時計の初期化
-  def new do
-    %__MODULE__{pt: System.os_time(:millisecond), c: 0}
+  def new(clock_fun \\ &default_physical_time/0) do
+    %__MODULE__{pt: clock_fun.(), c: 0}
   end
 
   # ローカルイベントの発生（SENDやSPAWNなど）
-  def send(%__MODULE__{pt: pt, c: c}) do
-    now = System.os_time(:millisecond)
+  def send(%__MODULE__{pt: pt, c: c}, clock_fun \\ &default_physical_time/0) do
+    now = clock_fun.()
 
     if now > pt do
       %__MODULE__{pt: now, c: 0}
@@ -23,8 +27,8 @@ defmodule TracerBackend.HLC do
   end
 
   # メッセージ受信時の時計の更新（RECEIVEなど）
-  def receive(%__MODULE__{pt: local_pt, c: local_c}, %__MODULE__{pt: msg_pt, c: msg_c}) do
-    now = System.os_time(:millisecond)
+  def receive(%__MODULE__{pt: local_pt, c: local_c}, %__MODULE__{pt: msg_pt, c: msg_c}, clock_fun \\ &default_physical_time/0) do
+    now = clock_fun.()
 
     max_pt = Enum.max([now, local_pt, msg_pt])
 
