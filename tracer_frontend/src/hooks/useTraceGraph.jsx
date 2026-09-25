@@ -12,7 +12,8 @@ export function useTraceGraph({
   visibleEvents,
   visibleCategories,
   showEdgeLabels,
-  isFocusReleased
+  isFocusReleased,
+  showFutureNodes // 【追加】未来ノード表示フラグ
 }) {
   const [rfNodes, setRfNodes] = useState([]);
   const [rfEdges, setRfEdges] = useState([]);
@@ -118,18 +119,24 @@ export function useTraceGraph({
     events.forEach((evt, idx) => {
       const rawNormSource = getNormId(evt.source);
       const rawNormTarget = getNormId(evt.target);
-      const effSource = rawNormSource ? getEffectiveId(rawNormSource) : null;
-      const effTarget = rawNormTarget ? getEffectiveId(rawNormTarget) : null;
 
-      if (rawNormSource && !nLifecycles.has(rawNormSource)) {
+      // ▼ 追加: リファレンス宛て/発の通信はグラフのノード・エッジ対象から除外する
+      const isSourceRef = rawNormSource && rawNormSource.startsWith("#Reference");
+      const isTargetRef = rawNormTarget && rawNormTarget.startsWith("#Reference");
+
+      const effSource = (rawNormSource && !isSourceRef) ? getEffectiveId(rawNormSource) : null;
+      const effTarget = (rawNormTarget && !isTargetRef) ? getEffectiveId(rawNormTarget) : null;
+
+      if (rawNormSource && !isSourceRef && !nLifecycles.has(rawNormSource)) {
         nLifecycles.set(rawNormSource, { spawnAt: idx, exitAt: Infinity, history: [] });
       }
-      if (rawNormTarget && !nLifecycles.has(rawNormTarget)) {
+      if (rawNormTarget && !isTargetRef && !nLifecycles.has(rawNormTarget)) {
         nLifecycles.set(rawNormTarget, { spawnAt: idx, exitAt: Infinity, history: [] });
       }
 
       const processNode = (effId, rawId, name) => {
-        if (!effId || allNodesMap.has(effId)) return;
+        // ▼ 追加: リファレンス文字列はノードとして登録しない
+        if (!effId || effId.startsWith("#Reference") || allNodesMap.has(effId)) return;
         
         let displayLabel = effId;
         let nodeStyle = {};
@@ -175,7 +182,7 @@ export function useTraceGraph({
 
       if (effSource) processNode(effSource, rawNormSource, getFinalName(rawNormSource, evt.source_name));
       if (effTarget) processNode(effTarget, rawNormTarget, getFinalName(rawNormTarget, evt.target_name));
-
+      
       if (evt.type === 'EXIT') {
         if (rawNormSource && nLifecycles.has(rawNormSource)) {
           const lc = nLifecycles.get(rawNormSource);
@@ -204,7 +211,7 @@ export function useTraceGraph({
           index: idx, 
           payload: evt.payload, 
           type: evt.type,
-          category: evt.category || 'app' // ← 追加
+          category: evt.category || 'app' 
         };
 
         if (!allEdgesMap.has(edgeId)) {
@@ -238,27 +245,23 @@ export function useTraceGraph({
   const passesFilters = useCallback((evt) => {
     if (!evt || !visibleEvents[evt.type]) return false;
     
-    // 【変更】category による単一判定
     const cat = evt.category || "app";
     if (visibleCategories && !visibleCategories[cat]) {
       return false;
     }
 
-    // 無名プロセス除外（既存のまま）
     if (hideAnonymous) {
       const sNorm = getNormId(evt.source);
       const tNorm = getNormId(evt.target);
       const sNameFinal = getFinalName(sNorm, evt.source_name);
       const tNameFinal = getFinalName(tNorm, evt.target_name);
-      const sAnon = evt.source && (!sNameFinal || sNameFinal === "[]" || sNameFinal.startsWith("#PID"));
-      const tAnon = evt.target && (!tNameFinal || tNameFinal === "[]" || tNameFinal.startsWith("#PID"));
-      const sPooled = sNorm && getEffectiveId(sNorm).startsWith('pool-');
+      const sAnon = evt.source && (!sNameFinal || sNameFinal === "[]" || sNameFinal.startsWith("#PID") || evt.source.startsWith("#Reference"));
+      const tAnon = evt.target && (!tNameFinal || tNameFinal === "[]" || tNameFinal.startsWith("#PID") || evt.target.startsWith("#Reference"));
       const tPooled = tNorm && getEffectiveId(tNorm).startsWith('pool-');
       if (sAnon && !sPooled) return false;
       if (tAnon && !tPooled) return false;
     }
     
-    // 検索クエリ判定（既存のまま）
     if (searchQuery !== "") {
       if (searchQuery.startsWith('pool-')) {
         const sGroup = pidToGroupId.get(getNormId(evt.source));
@@ -288,7 +291,7 @@ export function useTraceGraph({
   // 動的スタイル生成ループ
   // ==========================================
   useEffect(() => {
-    if (masterData.nodes.length === 0 || currentIndex < 0) { 
+    if (masterData.nodes.length === 0 || currentIndex < 0) {
       setRfNodes([]); setRfEdges([]); return; 
     }
 
@@ -298,14 +301,17 @@ export function useTraceGraph({
     const q = searchQuery.toLowerCase();
     const isEventVisible = currentEvt && visibleEvents[currentEvt.type];
     
+    // 未来ノード表示設定に対応したグループメンバー抽出
     const currentActiveGroupMembers = new Map();
     groupMembers.forEach((memberPids, gId) => {
       const activePids = new Set();
       memberPids.forEach(pid => {
         const lc = masterData.nLifecycles.get(pid);
-        if (lc && lc.spawnAt <= currentIndex) activePids.add(pid);
+        if (lc && (showFutureNodes || lc.spawnAt <= currentIndex)) {
+          activePids.add(pid);
+        }
       });
-      currentActiveGroupMembers.set(gId, activePids);
+      if (activePids.size > 0) currentActiveGroupMembers.set(gId, activePids);
     });
 
     const updatedNodes = masterData.nodes.map(node => {
@@ -314,12 +320,10 @@ export function useTraceGraph({
       const isFocused = currentEvt && isEventVisible && (node.id === curNormSource || node.id === curNormTarget);
       const isAnonymousNode = node.data.isAnonymousNode;
       const matchesSearch = searchQuery === "" || (node.data.rawName && node.data.rawName.toLowerCase().includes(q)) || node.id.toLowerCase().includes(q);
+      
       const hasVisibleActivity = filteredEvents.some(
         e => getEffectiveId(getNormId(e.source)) === node.id || getEffectiveId(getNormId(e.target)) === node.id
       );
-
-      // 【追加】システム常駐ノード判定 (:group, :code_server, :erlang 等)
-      const isSystemProcessNode = [":group", ":code_server", ":erlang", ":standard_error", ":user"].includes(node.data.rawName);
 
       let currentState = "No state yet";
       if (lc && lc.history) {
@@ -331,6 +335,7 @@ export function useTraceGraph({
       let isDead = false;
       let displayLabel = node.data.label;
       let poolSpawnedCount = 0;
+      let poolTotalCount = 0;
 
       const exitReason = lc?.exitReason || '';
       const isNormalExit = [':normal', ':shutdown', 'normal', 'shutdown'].includes(exitReason);
@@ -341,6 +346,7 @@ export function useTraceGraph({
 
       if (node.data.isPool) {
         const members = groupMembers.get(node.id) ? Array.from(groupMembers.get(node.id)) : [];
+        poolTotalCount = members.length;
         let aliveCount = 0;
 
         members.forEach(pid => {
@@ -356,7 +362,7 @@ export function useTraceGraph({
         const sig = groupInfo.get(node.id)?.sig || 'Worker';
         displayLabel = `Pool: ${sig}\n(${aliveCount}/${poolSpawnedCount} alive)`;
 
-        if (poolSpawnedCount === 0) {
+        if (poolSpawnedCount === 0 && !showFutureNodes) {
           newStyle.opacity = 0;
         } else if (isAllDead) {
           newStyle.backgroundColor = '#333333';
@@ -366,7 +372,6 @@ export function useTraceGraph({
           newStyle.borderColor = '#777';
         } else {
           newStyle.opacity = 1;
-          if (currentEvt && !isFocused && !isFocusReleased) newStyle.opacity = 0.3;
         }
       } else if (isCurrentlyPooledWorker) {
         isDead = lc && lc.exitAt <= currentIndex;
@@ -387,15 +392,15 @@ export function useTraceGraph({
           backgroundColor: isDead ? (isCrash ? '#4a1515' : '#333333') : '#e2e8f0', 
           borderStyle: isDead ? (isCrash ? 'solid' : 'dashed') : 'solid', 
           borderWidth: '2px',
-          borderColor: isDead ? (isCrash ? '#ef4444' : '#777') : '#64748b', 
-          opacity: (!isSpawned) ? 0 : (isDead ? (isCrash ? 0.7 : 0.5) : (currentEvt && !isFocused && !isFocusReleased ? 0.3 : 1)),
+          borderColor: isDead ? (isCrash ? '#ef4444' : '#777') : '#64748b',
+          opacity: (!isSpawned && !showFutureNodes) ? 0 : (isDead ? (isCrash ? 0.7 : 0.5) : 1), 
           transition: 'all 0.3s ease' 
         };
       } else {
         isDead = lc && lc.exitAt <= currentIndex;
         const isCrash = isDead && !isNormalExit;
         
-        if (!isSpawned) newStyle.opacity = 0; 
+        if (!isSpawned && !showFutureNodes) newStyle.opacity = 0; 
         else if (isDead) { 
           newStyle.backgroundColor = isCrash ? '#4a1515' : '#333333'; 
           newStyle.color = isCrash ? '#fca5a5' : '#aaaaaa'; 
@@ -403,10 +408,7 @@ export function useTraceGraph({
           newStyle.borderStyle = isCrash ? 'solid' : 'dashed'; 
           newStyle.borderColor = isCrash ? '#ef4444' : '#777'; 
         }
-        else if (currentEvt && !isFocused && !isFocusReleased) newStyle.opacity = 0.3;
       }
-
-      if (!matchesSearch && searchQuery !== "") newStyle.opacity = 0.05;
 
       if (isSpawned && isFocused) {
         const eventColor = getEventColor(currentEvt.type, currentEvt.payload);
@@ -416,15 +418,26 @@ export function useTraceGraph({
         if (!node.data.isPool && !isAnonymousNode && !isCurrentlyPooledWorker) newStyle.backgroundColor = 'white';
       }
       
-      const isHidden = node.data.isPool 
-        ? (poolSpawnedCount === 0) 
-        : (!isSpawned || (hideAnonymous && isAnonymousNode) || !hasVisibleActivity);
+      // 検索・フィルタリングによる非表示判定
+      const isHiddenBySearch = searchQuery !== "" && !matchesSearch && !hasVisibleActivity;
+      const isHidden = isHiddenBySearch || (node.data.isPool 
+        ? ((poolSpawnedCount === 0 && !showFutureNodes) || !hasVisibleActivity || poolTotalCount === 0) 
+        : ((!isSpawned && !showFutureNodes) || (hideAnonymous && isAnonymousNode) || !hasVisibleActivity));
+
+      let dynamicClassName = node.className || "";
+      if (showFutureNodes && !isHidden) {
+        const isPoolFuture = node.data.isPool && poolSpawnedCount === 0;
+        if (isPoolFuture || (!node.data.isPool && !isSpawned)) {
+          dynamicClassName = dynamicClassName ? `${dynamicClassName} node-future` : "node-future";
+        }
+      }
 
       return { 
         ...node, 
         data: { ...node.data, label: displayLabel, currentState, isDead }, 
         style: newStyle, 
-        hidden: isHidden 
+        hidden: isHidden,
+        className: dynamicClassName
       };    
     });
 
@@ -434,8 +447,10 @@ export function useTraceGraph({
         const spawnedMembers = updatedNodes.filter(n => activePids.has(n.id) && !n.hidden);
         if (spawnedMembers.length >= 2) {
           let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          let allFuture = true;
           
           spawnedMembers.forEach(n => {
+            if (!n.className?.includes('node-future')) allFuture = false;
             const w = parseInt(n.style?.width || nodeWidth, 10);
             const h = parseInt(n.style?.height || nodeHeight, 10);
             minX = Math.min(minX, n.position.x);
@@ -446,6 +461,9 @@ export function useTraceGraph({
           
           const padX = 30, padY = 25;
           const sig = groupInfo.get(gId)?.sig || 'Worker';
+          
+          let boxClassName = 'pool-group-node';
+          if (allFuture && showFutureNodes) boxClassName += ' node-future';
           
           groupBoundingNodes.push({
             id: `box-${gId}`, 
@@ -463,7 +481,7 @@ export function useTraceGraph({
             },
             position: { x: minX - padX, y: minY - padY }, 
             style: { width: maxX - minX + padX * 2, height: maxY - minY + padY * 2, zIndex: -1 },
-            className: 'pool-group-node', 
+            className: boxClassName, 
             draggable: false, 
             selectable: false
           });
@@ -471,13 +489,18 @@ export function useTraceGraph({
       }
     });
 
+    // 修正済み：単一ノード検索時にエッジが消えるバグを防止
     const getEndpointId = (rawId) => {
       if (!isGroupMode) return rawId;
       const gId = pidToGroupId.get(rawId);
       if (!gId || (groupCounts.get(gId) || 0) < 2) return rawId;
       if (isPoolCollapsed(gId)) return gId;
-      const activeMembers = currentActiveGroupMembers.get(gId);
-      if (activeMembers && activeMembers.size >= 2) return `box-${gId}`;
+      
+      const activePids = currentActiveGroupMembers.get(gId);
+      if (!activePids) return rawId;
+
+      const spawnedMembers = updatedNodes.filter(n => activePids.has(n.id) && !n.hidden);
+      if (spawnedMembers.length >= 2) return `box-${gId}`;
       return rawId;
     };
 
@@ -508,18 +531,16 @@ export function useTraceGraph({
     });
 
     const updatedEdges = Array.from(aggregatedEdgesMap.values()).map(aggEdge => {
-      const isSpawned = aggEdge.spawnAt <= currentIndex;
+      const isSpawnedEdge = aggEdge.spawnAt <= currentIndex;
       const pastEvents = aggEdge.history.filter(h => h.index <= currentIndex).sort((a, b) => a.index - b.index);
 
       let currentPayload = "No data yet";
       let latestType = "UNKNOWN";
-      let isLatestSystem = false;
       
       if (pastEvents.length > 0) {
         const latest = pastEvents[pastEvents.length - 1];
         currentPayload = latest.payload;
         latestType = latest.type;
-        isLatestSystem = latest.is_system;
       }
 
       const isTargetSourceMatch = curNormSource === aggEdge.source || getEndpointId(curNormSource) === aggEdge.source;
@@ -533,10 +554,16 @@ export function useTraceGraph({
 
       let newStyle = { stroke: edgeBaseColor, opacity: 1, strokeWidth: 2, transition: 'all 0.3s ease' };
       
-      if (!isSpawned) newStyle.opacity = 0;
-      else if (currentEvt && !isFocused && !isFocusReleased) newStyle.opacity = 0.2;
+      if (!isSpawnedEdge) {
+        if (!showFutureNodes) {
+          newStyle.opacity = 0;
+        } else {
+          newStyle.opacity = 0.25;
+          newStyle.strokeDasharray = '4,4';
+        }
+      }
 
-      if (isSpawned && isFocused) {
+      if (isSpawnedEdge && isFocused) {
         newStyle.stroke = getEventColor(currentEvt.type, currentEvt.payload); 
         newStyle.strokeWidth = 4;
       }
@@ -545,12 +572,13 @@ export function useTraceGraph({
       if (pastEvents.length > 0) {
         currentPayload = pastEvents[pastEvents.length - 1].payload;
         latestType = pastEvents[pastEvents.length - 1].type;
-        latestCategory = pastEvents[pastEvents.length - 1].category || "app"; // ← 直近のカテゴリを取得
+        latestCategory = pastEvents[pastEvents.length - 1].category || "app"; 
       }
 
       const hasVisibleType = Array.from(aggEdge.types).some(t => visibleEvents[t]);
       const isCategoryVisible = visibleCategories ? !!visibleCategories[latestCategory] : true;
-      const hiddenByFilter = !isCategoryVisible || !hasVisibleType;
+      
+      const isHiddenEdge = (!isSpawnedEdge && !showFutureNodes) || (!isCategoryVisible || !hasVisibleType);
       const signature = extractSignature(currentPayload);
 
       return { 
@@ -559,10 +587,10 @@ export function useTraceGraph({
         target: aggEdge.target, 
         data: { types: aggEdge.types, currentPayload, latestType, signature }, 
         style: newStyle, 
-        animated: (isSpawned && isFocused), 
-        zIndex: (isSpawned && isFocused) ? 1000 : 0, 
-        hidden: !isSpawned || hiddenByFilter,
-        label: (isSpawned && !hiddenByFilter && currentPayload !== "No data yet" && showEdgeLabels) ? signature : undefined,
+        animated: (isSpawnedEdge && isFocused), 
+        zIndex: (isSpawnedEdge && isFocused) ? 1000 : 0, 
+        hidden: isHiddenEdge,
+        label: (isSpawnedEdge && !isHiddenEdge && currentPayload !== "No data yet" && showEdgeLabels) ? signature : undefined,
         labelStyle: { fill: edgeBaseColor, fontWeight: 'bold', fontSize: 10, opacity: newStyle.opacity },
         labelBgStyle: { fill: 'rgba(255, 255, 255, 0.8)', stroke: edgeBaseColor, strokeWidth: 1, rx: 4, ry: 4, opacity: newStyle.opacity }, 
         labelShowBg: true
@@ -573,10 +601,9 @@ export function useTraceGraph({
     setRfEdges(updatedEdges);
   }, [
     currentIndex, masterData, events, isFocusReleased, getNormId, searchQuery, 
-    visibleCategories, // ← hideSystemMessages から差し替え
-    hideAnonymous, visibleEvents, groupCounts, groupInfo, 
+    visibleCategories, hideAnonymous, visibleEvents, groupCounts, groupInfo, 
     showEdgeLabels, getEffectiveId, groupMembers, isPoolCollapsed, isGroupMode,
-    togglePoolCollapse
+    togglePoolCollapse, showFutureNodes
   ]);
 
   return {

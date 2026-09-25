@@ -138,17 +138,11 @@ defmodule TracerBackend.SystemTracer do
         _ -> {System.os_time(:millisecond), 0}
       end
 
-    # 【重要】安全に文字列化し、確実に判定する
     category = safe_classify(type, src_name, target_name, payload)
-
-    # デバッグ用コンソール出力（バックエンドのターミナルに表示されます）
-    if String.contains?(inspect(payload), ":io_request") do
-      IO.puts("[DEBUG Backend Classifier] IO detected! classified as: #{category}")
-    end
 
     event_data = %{
       type: type,
-      category: category,
+      category: category, # :app | :otp | :system | :timer
       source: format_term(source),
       source_name: src_name,
       target: format_term(target),
@@ -166,50 +160,47 @@ defmodule TracerBackend.SystemTracer do
     )
   end
 
-  # 例外で落ちてフォールバックしないよう全体を保護
   defp safe_classify(type, src_name, tgt_name, payload) do
     classify_logic(type, to_string(src_name || ""), to_string(tgt_name || ""), inspect(payload))
   rescue
-    e ->
-      IO.puts("[Classifier ERROR] #{inspect(e)}")
-      "app"
+    _ -> :app
   end
 
   defp classify_logic(type, src_str, tgt_str, payload_str) do
     cond do
-      # 1. 常駐システムプロセスとの通信 (名前で判定)
+      # 1. 常駐システムプロセスとの通信
       String.contains?(src_str, "group") or String.contains?(tgt_str, "group") or
       String.contains?(src_str, "code_server") or String.contains?(tgt_str, "code_server") or
       String.contains?(src_str, "erlang") or String.contains?(tgt_str, "erlang") or
       String.contains?(src_str, "timer_server") or String.contains?(tgt_str, "timer_server") or
       String.contains?(src_str, "standard_error") or String.contains?(tgt_str, "standard_error") ->
-        "system"
+        :system
 
-      # 2. ペイロード文字列による判定 (IO / Code)
+      # 2. IO / Code ロード
       String.contains?(payload_str, ":io_request") or
       String.contains?(payload_str, ":io_reply") or
       String.contains?(payload_str, ":code_call") or
       String.contains?(payload_str, ":get_object_code") ->
-        "system"
+        :system
 
       # 3. タイマー
       payload_str == ":timeout" or payload_str == "\"timeout\"" or
       String.contains?(payload_str, ":timeout") or
       String.contains?(payload_str, "apply_interval") ->
-        "timer"
+        :timer
 
-      # 4. OTP メッセージ
+      # 4. OTP 通信
       String.contains?(payload_str, "$gen_call") or
       String.contains?(payload_str, "$gen_cast") or
       String.contains?(payload_str, "$gen_statem") or
       String.contains?(payload_str, ":DOWN") or
       String.contains?(payload_str, ":EXIT") or
       type == "EXIT" ->
-        "otp"
+        :otp
 
       # 5. アプリケーションメッセージ
       true ->
-        "app"
+        :app
     end
   end
 

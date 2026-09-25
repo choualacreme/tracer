@@ -39,7 +39,9 @@ export default function LogPanel({
   isPanelOpen,
   setIsPanelOpen,
   setIsFocusReleased,
-  setCollapsedPools
+  setCollapsedPools,
+  showFutureNodes,
+  setShowFutureNodes
 }) {
   return (
     <div className={`overlay-panel-container ${isPanelOpen ? 'panel-open' : 'panel-closed'}`}>
@@ -81,85 +83,98 @@ export default function LogPanel({
         {/* メインコンテンツ・フィルタ */}
         <div className="panel-main-content">
           <div className="filter-box">
-            {/* Type (丸ボタン) */}
-            <div className="layers-row">
-              <span className="layers-label">Type:</span>
-              {Object.keys(visibleEvents).map(type => {
-                const isVisible = visibleEvents[type];
-                const isExit = type === 'EXIT';
-                const bgColor = isVisible 
-                  ? (isExit ? 'linear-gradient(135deg, #888888 50%, #F44747 50%)' : getEventColor(type)) 
-                  : 'transparent';
-                const borderColor = isVisible ? (isExit ? '#888888' : getEventColor(type)) : '#444';
-
-                return (
-                  <button 
-                    key={type} 
-                    onClick={() => { setVisibleEvents(p => ({...p, [type]: !p[type]})); setIsFocusReleased(true); }} 
-                    className="layer-tag-btn" 
-                    style={{ background: bgColor, color: isVisible ? '#fff' : '#666', border: `1px solid ${borderColor}` }}
-                  >
-                    {type}
-                  </button>
-                );
-              })}
+            {/* 1. 最上部ヘッダー：タイトル ＋ 全体リセット */}
+            <div className="filter-header">
+              <span className="filter-title">FILTERS</span>
+              <button onClick={resetFilters} className="filter-reset-link" title="すべてのフィルタ設定を初期状態に戻す">
+                ↺ リセット
+              </button>
             </div>
 
-            {/* 区切り線 */}
-            <div className="filter-divider" />
-
-            {/* Category (四角ボタン) */}
-            <div className="layers-row">
-              <span className="layers-label">Category:</span>
-              {[
-                { id: 'app', label: 'APP' },
-                { id: 'otp', label: 'OTP' },
-                { id: 'system', label: 'SYSTEM' },
-                { id: 'timer', label: 'TIMER' }
-              ].map(cat => {
-                const isVisible = !!visibleCategories[cat.id];
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => {
-                      setVisibleCategories(p => ({ ...p, [cat.id]: !p[cat.id] }));
-                      setIsFocusReleased(true);
-                    }}
-                    className={`category-tag-btn cat-btn-${cat.id} ${isVisible ? 'active' : 'inactive'}`}
-                  >
-                    {cat.label}
-                  </button>
-                );
-              })}
+            {/* 2. 検索窓（全幅配置） */}
+            <div style={{ marginBottom: '8px' }}>
+              <input 
+                type="text" 
+                placeholder="🔍 モジュール名、PID、Payloadで検索..." 
+                value={searchQuery} 
+                onChange={(e) => { setSearchQuery(e.target.value); setIsFocusReleased(true); }} 
+                className="search-input" 
+                style={{ width: '100%', boxSizing: 'border-box' }}
+              />
             </div>
 
-            {/* 検索・オプション行 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div className="search-row">
-                <input 
-                  type="text" 
-                  placeholder="🔍 モジュール名、PID、Payloadで検索..." 
-                  value={searchQuery} 
-                  onChange={(e) => { setSearchQuery(e.target.value); setIsFocusReleased(true); }} 
-                  className="search-input" 
-                />
-                <button onClick={resetFilters} className="search-reset-btn">リセット</button>
+            {/* 3. Type 行（カラフルなピル型ボタン） */}
+            <div className="filter-row">
+              <span className="filter-row-label">Type:</span>
+              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                {Object.keys(visibleEvents).map(type => {
+                  const isVisible = visibleEvents[type];
+                  const isExit = type === 'EXIT';
+                  const bgColor = isVisible 
+                    ? (isExit ? 'linear-gradient(135deg, #888888 50%, #F44747 50%)' : getEventColor(type)) 
+                    : 'transparent';
+                  const borderColor = isVisible ? (isExit ? '#888888' : getEventColor(type)) : '#334155';
+
+                  return (
+                    <button 
+                      key={type} 
+                      onClick={() => { setVisibleEvents(p => ({...p, [type]: !p[type]})); setIsFocusReleased(true); }} 
+                      className="layer-tag-btn" 
+                      style={{ background: bgColor, color: isVisible ? '#fff' : '#64748b', border: `1px solid ${borderColor}` }}
+                    >
+                      {type}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="options-row">
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={hideAnonymous} onChange={(e) => { setHideAnonymous(e.target.checked); setIsFocusReleased(true); }} /> 
-                  無名プロセスを隠す
-                </label>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={isGroupMode} onChange={(e) => { 
-                    setIsGroupMode(e.target.checked); 
-                    setCollapsedPools(new Set()); 
-                    setIsFocusReleased(true); 
-                    if (searchQuery.startsWith('pool-')) setSearchQuery(""); 
-                  }} /> 
-                  同種プロセスをまとめる
-                </label>
+            </div>
+
+            {/* 4. Category 行（モノトーンセグメントボタン・区切り線なし） */}
+            <div className="filter-row">
+              <span className="filter-row-label">Category:</span>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {[
+                  { id: 'app', label: 'APP' },
+                  { id: 'otp', label: 'OTP' },
+                  { id: 'system', label: 'SYSTEM' },
+                  { id: 'timer', label: 'TIMER' }
+                ].map(cat => {
+                  const isVisible = !!visibleCategories[cat.id];
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => {
+                        setVisibleCategories(p => ({ ...p, [cat.id]: !p[cat.id] }));
+                        setIsFocusReleased(true);
+                      }}
+                      className={`cat-btn-mono ${isVisible ? 'active' : 'inactive'}`}
+                    >
+                      {cat.label}
+                    </button>
+                  );
+                })}
               </div>
+            </div>
+
+            {/* 5. オプション行 */}
+            <div className="options-row" style={{ marginTop: '6px' }}>
+              <label className="checkbox-label">
+                <input type="checkbox" checked={hideAnonymous} onChange={(e) => { setHideAnonymous(e.target.checked); setIsFocusReleased(true); }} /> 
+                無名プロセスを隠す
+              </label>
+              <label className="checkbox-label">
+                <input type="checkbox" checked={isGroupMode} onChange={(e) => { 
+                  setIsGroupMode(e.target.checked); 
+                  setCollapsedPools(new Set()); 
+                  setIsFocusReleased(true); 
+                  if (searchQuery.startsWith('pool-')) setSearchQuery(""); 
+                }} /> 
+                同種プロセスをまとめる
+              </label>
+              <label className="checkbox-label">
+                <input type="checkbox" checked={showFutureNodes} onChange={(e) => { setShowFutureNodes(e.target.checked); setIsFocusReleased(true); }} /> 
+                未来のプロセスを薄く表示
+              </label>
             </div>
           </div>
 
@@ -172,38 +187,40 @@ export default function LogPanel({
             <div id="log-table-container" className="table-scroll-area">
               {activeTab === 'logs' ? (
                 <table className="data-table">
-                  {/* テーブルヘッダーとデータ行 */}
                   <thead className="data-table-head">
                     <tr>
-                      <th className="th-pt">PT (実時間)</th>
-                      <th className="th-lt">LT</th>
-                      <th className="th-cat">Category</th>
-                      <th className="th-type">Type</th>
-                      <th className="th-source">Source</th>
-                      <th className="th-target">Target</th>
-                      <th className="th-payload">Payload</th>
+                      <th className="th-pt" title="Physical Time (物理時間)">PT</th>
+                      <th className="th-lt" title="Logical Counter (論理カウンタ)">LC</th>
+                      <th className="th-cat" title="Category (カテゴリ)">Category</th>
+                      <th className="th-type" title="Type (タイプ)">Type</th>
+                      <th className="th-source" title="Source (送信元)">Source</th>
+                      <th className="th-target" title="Target (受信先)">Target</th>
+                      <th className="th-payload" title="Payload (ペイロード)">Payload</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredEvents.map((evt, index) => {
-                      const showPT = index === 0 || filteredEvents[index - 1].timestamp !== evt.timestamp;
+                      const showPT = index === 0 || filteredEvents[index - 1].hlc_pt !== evt.hlc_pt;
                       const normSource = getNormId(evt.source); 
                       const normTarget = getNormId(evt.target);
                       const finalSourceName = getFinalName(normSource, evt.source_name); 
                       const finalTargetName = getFinalName(normTarget, evt.target_name);
                       const isSelected = evt.originalIndex === currentIndex;
-                      const cat = evt.category || 'app';
+                      const cat = (evt.category || 'app').toLowerCase();
                       
                       return (
                         <tr id={`log-row-${evt.originalIndex}`} key={evt.originalIndex} 
                             onClick={() => { setIsPlaying(false); jumpToIndex(evt.originalIndex); }} 
                             className={`log-row ${isSelected ? 'log-row-selected' : ''}`}
                         >
-                          <td className="col-pt">{showPT ? formatTime(evt.timestamp) : ''}</td>
-                          <td className="col-lt">{evt.logicalCounter}</td>
+                          <td className="col-pt">{showPT ? formatTime(evt.hlc_pt) : ''}</td>
+                          <td className="col-lc">{evt.hlc_c}</td>
+
+                          {/* モノトーンタグとして表示 */}
                           <td className="col-cat">
-                            <span className={`cat-badge cat-${cat}`}>{cat}</span>
+                            <span className="cat-badge-neutral">{cat}</span>
                           </td>
+
                           <td className="col-type" style={{ color: getEventColor(evt.type, evt.payload) }}>{evt.type}</td>
                           <td className="col-process">{renderProcess(normSource, finalSourceName)}</td>
                           <td className="col-process">{renderProcess(normTarget, finalTargetName)}</td>

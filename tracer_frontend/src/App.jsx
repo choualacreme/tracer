@@ -37,6 +37,8 @@ function TraceViewer() {
   const [isGroupMode, setIsGroupMode] = useState(false);
   const [collapsedPools, setCollapsedPools] = useState(new Set());
 
+  const [showFutureNodes, setShowFutureNodes] = useState(true);
+
   const [visibleCategories, setVisibleCategories] = useState({
     app: true,
     otp: true,
@@ -44,9 +46,6 @@ function TraceViewer() {
     timer: false
   });
 
-  // ==========================================
-  // カスタムフックによるグラフデータとフィルタリング計算
-  // ==========================================
   const {
     rfNodes, setRfNodes,
     rfEdges, setRfEdges,
@@ -67,14 +66,55 @@ function TraceViewer() {
     visibleEvents,
     visibleCategories,
     showEdgeLabels,
-    isFocusReleased
+    isFocusReleased,
+    showFutureNodes
   });
+
+  // ==========================================
+  // 1. JSON エクスポート / インポート機能
+  // ==========================================
+  const exportToJson = useCallback(() => {
+    if (events.length === 0) return;
+    const dataStr = JSON.stringify(events, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `actor_trace_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [events]);
+
+  const importFromJson = useCallback((e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target.result);
+        setEvents(parsed);
+        setCurrentIndex(-1);
+        setCurrentTime(0);
+        setIsLive(false);
+        isLiveRef.current = false;
+        setIsPlaying(false);
+        setCollapsedPools(new Set());
+      } catch (err) {
+        alert("JSONの読み込みに失敗しました。ファイル形式を確認してください。");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = null;
+  }, []);
 
   // ==========================================
   // WebSocket コネクション
   // ==========================================
   useEffect(() => {
-    const wsHost = window.location.hostname === 'localhost' ? 'ws://localhost:4000/socket' : `wss://${window.location.host}/socket`;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host; 
+    const wsHost = `${protocol}//${host}/socket`;
+    
     const socket = new Socket(wsHost, { params: {} });
     socket.connect();
     
@@ -83,35 +123,15 @@ function TraceViewer() {
     
     ch.on("new_trace_event", payload => {
       setEvents(prev => {
-        let pt = payload.hlc_pt;
-        let c = payload.hlc_c;
-
-        if (pt === undefined && payload.clock) {
-          const parts = payload.clock.split('-');
-          pt = parseInt(parts[0], 10);
-          c = parseInt(parts[1], 10);
-        }
-
-        // category を安全に文字列化し、未定義時のみ "app" にする
-        const rawCat = payload.category;
-        const normalizedCategory = (rawCat && typeof rawCat === 'string') 
-          ? rawCat.toLowerCase() 
-          : (rawCat ? String(rawCat).toLowerCase() : "app");
-
-        const evt = { 
-          ...payload, 
-          timestamp: pt || Date.now(), 
-          logicalCounter: c || 0,
-          category: normalizedCategory
-        };
+        const evt = { ...payload };
         
-        const newEvents = [...prev, evt].sort((a, b) => 
-          a.timestamp === b.timestamp ? a.logicalCounter - b.logicalCounter : a.timestamp - b.timestamp
-        );
+        const newEvents = [...prev, evt].sort((a, b) => {
+          return a.hlc_pt === b.hlc_pt ? a.hlc_c - b.hlc_c : a.hlc_pt - b.hlc_pt;
+        });
         
         if (isLiveRef.current) { 
           setCurrentIndex(newEvents.length - 1); 
-          setCurrentTime(newEvents[newEvents.length - 1].timestamp); 
+          setCurrentTime(newEvents[newEvents.length - 1].hlc_pt); 
         }
         return newEvents;
       });
@@ -152,7 +172,6 @@ function TraceViewer() {
     }
   }, [currentIndex, events, focusOnEvent, autoFocus]);
 
-  // テーブルの自動スクロール
   useEffect(() => {
     if (currentIndex >= 0 && activeTab === 'logs') {
       const row = document.getElementById(`log-row-${currentIndex}`);
@@ -165,7 +184,7 @@ function TraceViewer() {
 
   const jumpToIndex = useCallback((idx) => { 
     setCurrentIndex(idx); 
-    if (events[idx]) setCurrentTime(events[idx].timestamp); 
+    if (events[idx]) setCurrentTime(events[idx].hlc_pt); 
     setIsFocusReleased(false); 
     if (isLive) { setIsLive(false); isLiveRef.current = false; } 
   }, [events, isLive]);
@@ -190,18 +209,17 @@ function TraceViewer() {
 
   const resetFilters = useCallback(() => { 
     setSearchQuery(""); 
-    setVisibleCategories({ app: true, otp: true, system: false, timer: false }); // ← 更新
+    setVisibleCategories({ app: true, otp: true, system: false, timer: false });
     setHideAnonymous(false); 
     setVisibleEvents({ 'SPAWN': true, 'SEND': true, 'RECEIVE': true, 'EXIT': true, 'LOCAL EVENT': true }); 
     setIsFocusReleased(true); 
   }, []);
 
-  // 再生ロジック
   useEffect(() => {
     if (isPlaying && !isLive && currentIndex < events.length - 1) {
       const timer = setTimeout(
         () => jumpToNext(), 
-        Math.min(Math.max(events[currentIndex + 1].timestamp - events[currentIndex].timestamp, 50), 2000) / playbackSpeed
+        Math.min(Math.max(events[currentIndex + 1].hlc_pt - events[currentIndex].hlc_pt, 50), 2000) / playbackSpeed
       );
       return () => clearTimeout(timer);
     } else if (isPlaying && currentIndex >= events.length - 1) {
@@ -209,7 +227,7 @@ function TraceViewer() {
     }
   }, [isPlaying, isLive, currentIndex, events, jumpToNext, playbackSpeed]);
 
-  const timeRange = (events.length > 0 ? events[events.length - 1].timestamp : 0) - (events.length > 0 ? events[0].timestamp : 0) || 1;
+  const timeRange = (events.length > 0 ? events[events.length - 1].hlc_pt : 0) - (events.length > 0 ? events[0].hlc_pt : 0) || 1;
 
   // ==========================================
   // レンダリング
@@ -221,9 +239,19 @@ function TraceViewer() {
       {/* ヘッダー操作パネル */}
       <div className="header-controls">        
         <button onClick={() => { setEvents([]); setCurrentIndex(-1); setCurrentTime(0); setIsLive(true); isLiveRef.current = true; setIsPlaying(false); setCollapsedPools(new Set()); }} className="btn-clear">
-          ログ・グラフをクリア
+          クリア
         </button>
-        <button onClick={() => { const next = !isLive; setIsLive(next); isLiveRef.current = next; setIsPlaying(false); if(next && events.length > 0){ setCurrentIndex(events.length - 1); setCurrentTime(events[events.length - 1].timestamp); } }} className={`btn-base ${isLive ? 'btn-live-active' : 'btn-live-paused'}`}>
+        
+        {/* 【追加】エクスポート・インポートボタン */}
+        <button onClick={exportToJson} className="btn-base" style={{ backgroundColor: '#475569' }} disabled={events.length === 0}>
+          💾 保存 (JSON)
+        </button>
+        <label className="btn-base" style={{ backgroundColor: '#475569', cursor: 'pointer' }}>
+          📂 読込
+          <input type="file" accept=".json" hidden onChange={importFromJson} />
+        </label>
+
+        <button onClick={() => { const next = !isLive; setIsLive(next); isLiveRef.current = next; setIsPlaying(false); if(next && events.length > 0){ setCurrentIndex(events.length - 1); setCurrentTime(events[events.length - 1].hlc_pt); } }} className={`btn-base ${isLive ? 'btn-live-active' : 'btn-live-paused'}`} style={{ marginLeft: 'auto' }}>
           {isLive ? '🔴 LIVE (自動追従中)' : '⏸ LIVEを再開'}
         </button>
         {!isLive && (
@@ -259,17 +287,36 @@ function TraceViewer() {
               {(() => { 
                 const step = Math.max(1, Math.floor(filteredEvents.length / 200)); 
                 return filteredEvents.filter((_, i) => i % step === 0).map((evt) => (
-                  <div key={`time-hl-${evt.originalIndex}`} className="timeline-pin" style={{ left: `${((evt.timestamp - (events[0]?.timestamp || 0)) / timeRange) * 100}%` }} />
+                  <div key={`time-hl-${evt.originalIndex}`} className="timeline-pin" style={{ left: `${((evt.hlc_pt - (events[0]?.hlc_pt || 0)) / timeRange) * 100}%` }} />
                 )); 
               })()}
             </div>
-            <input 
-              type="range" min={events[0]?.timestamp || 0} max={events[events.length - 1]?.timestamp || 0} value={currentTime} 
+           <input 
+              type="range" min={events[0]?.hlc_pt || 0} max={events[events.length - 1]?.hlc_pt || 0} value={currentTime} 
               onChange={(e) => { 
-                const t = Number(e.target.value); setCurrentTime(t); setIsFocusReleased(false); setIsPlaying(false); 
+                const t = Number(e.target.value); 
+                setCurrentTime(t); 
+                setIsFocusReleased(false); 
+                setIsPlaying(false); 
                 if(isLive){ setIsLive(false); isLiveRef.current = false; } 
-                let n = -1; for(let i = events.length - 1; i >= 0; i--){ if(events[i].timestamp <= t){ n = i; break; } } 
-                setCurrentIndex(n); 
+                
+                // 【修正】フィルタリングされたログ (filteredEvents) の中から該当時間を探す
+                let targetFEvt = null;
+                for (let i = filteredEvents.length - 1; i >= 0; i--) {
+                  if (filteredEvents[i].hlc_pt <= t) {
+                    targetFEvt = filteredEvents[i];
+                    break;
+                  }
+                }
+                
+                if (targetFEvt) {
+                  setCurrentIndex(targetFEvt.originalIndex);
+                } else {
+                  // フィルタ結果が空の場合などのフォールバック
+                  let n = -1; 
+                  for(let i = events.length - 1; i >= 0; i--){ if(events[i].hlc_pt <= t){ n = i; break; } } 
+                  setCurrentIndex(n); 
+                }
               }} 
               className="timeline-range-input" disabled={events.length === 0} 
             />
@@ -292,6 +339,8 @@ function TraceViewer() {
             onEdgeMouseLeave={() => setTooltip(null)} 
             onPaneClick={() => { setIsFocusReleased(true); if (isLiveRef.current) setAutoFocus(false); }} 
             onMove={useCallback((event) => { if (isLiveRef.current && event && (event instanceof MouseEvent || event instanceof WheelEvent || (window.TouchEvent && event instanceof TouchEvent))) setAutoFocus(false); }, [])} 
+            
+            // 【修正】シングルクリックで時間を遷移させ、ハイライト状態にする
             onNodeClick={useCallback((_, node) => { 
               if (node.data?.isGroupBoundingBox || node.data?.isPool) { 
                 togglePoolCollapse(node.data?.isPool ? node.id : node.data.groupId); return; 
@@ -304,6 +353,8 @@ function TraceViewer() {
                 } 
               } 
             }, [events, getNormId, getEffectiveId, jumpToIndex, togglePoolCollapse])} 
+            
+            // 【修正】エッジクリック時も過去の通信履歴に時間をジャンプさせる
             onEdgeClick={useCallback((_, edge) => { 
               setIsFocusReleased(false); 
               if(isLiveRef.current){ setIsLive(false); isLiveRef.current = false; } 
@@ -312,10 +363,14 @@ function TraceViewer() {
                 const past = lc.history.filter(h => h.index <= currentIndex); 
                 if(past.length > 0) jumpToIndex(past[past.length - 1].index); 
               } 
-            }, [currentIndex, masterData, jumpToIndex])} 
+            }, [currentIndex, masterData, jumpToIndex])}
+            
+            // 【維持】ダブルクリック: 明示的に絞り込みたい時だけ検索窓に入力
             onNodeDoubleClick={useCallback((_, node) => { 
               if (!node.data?.isGroupBoundingBox) { 
-                setSearchQuery(node.id); setActiveTab('logs'); setIsFocusReleased(true); 
+                setSearchQuery(node.id); 
+                setActiveTab('logs'); 
+                setIsFocusReleased(true); 
               } 
             }, [])}
           >
@@ -324,7 +379,6 @@ function TraceViewer() {
           </ReactFlow>
         </div>
 
-        {/* 分離した右サイドバーパネル */}
         <LogPanel 
           events={events}
           filteredEvents={filteredEvents}
@@ -351,10 +405,11 @@ function TraceViewer() {
           setIsPanelOpen={setIsPanelOpen}
           setIsFocusReleased={setIsFocusReleased}
           setCollapsedPools={setCollapsedPools}
+          showFutureNodes={showFutureNodes}
+          setShowFutureNodes={setShowFutureNodes}
         />
       </div>
 
-      {/* 分離したツールチップ */}
       <TraceTooltip 
         tooltip={tooltip}
         events={events}
